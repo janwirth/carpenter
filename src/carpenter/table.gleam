@@ -93,33 +93,31 @@ fn privacy_prop(prop: Privacy) -> dynamic.Dynamic {
     Protected -> "protected"
     Public -> "public"
   }
-  |> atom.create_from_string
-  |> dynamic.from
+  |> atom.create
+  |> atom.to_dynamic
 }
 
 fn write_concurrency_prop(prop: WriteConcurrency) -> dynamic.Dynamic {
-  case prop {
-    WriteConcurrency -> "true"
-    NoWriteConcurrency -> "false"
-    AutoWriteConcurrency -> "auto"
+  let value = case prop {
+    WriteConcurrency -> atom.create("true")
+    NoWriteConcurrency -> atom.create("false")
+    AutoWriteConcurrency -> atom.create("auto")
   }
-  |> atom.create_from_string
-  |> fn(x) { #(atom.create_from_string("write_concurrency"), x) }
-  |> dynamic.from
+  dynamic.array([
+    atom.create("write_concurrency") |> atom.to_dynamic,
+    atom.to_dynamic(value),
+  ])
 }
 
 fn build_table(
   builder: TableBuilder(k, v),
   table_type: String,
 ) -> Result(atom.Atom, Nil) {
-  let name = atom.create_from_string(builder.name)
+  let name = atom.create(builder.name)
 
   let props =
-    [
-      atom.create_from_string(table_type),
-      atom.create_from_string("named_table"),
-    ]
-    |> list.map(dynamic.from)
+    [atom.create(table_type), atom.create("named_table")]
+    |> list.map(atom.to_dynamic)
 
   let props = case builder.privacy {
     Some(x) -> [privacy_prop(x), ..props]
@@ -133,8 +131,10 @@ fn build_table(
 
   let props = case builder.read_concurrency {
     Some(x) -> [
-      #(atom.create_from_string("read_concurrency"), x)
-        |> dynamic.from,
+      dynamic.array([
+        atom.create("read_concurrency") |> atom.to_dynamic,
+        dynamic.bool(x),
+      ]),
       ..props
     ]
     _ -> props
@@ -142,18 +142,13 @@ fn build_table(
 
   let props = case builder.compressed {
     True -> [
-      atom.create_from_string("compressed")
-        |> dynamic.from,
+      atom.create("compressed") |> atom.to_dynamic,
       ..props
     ]
     False -> props
   }
 
-  ets_bindings.new_table(
-    name,
-    props
-      |> list.map(dynamic.from),
-  )
+  ets_bindings.new_table(name, props)
 }
 
 /// Specify table as a `set`
@@ -229,7 +224,7 @@ pub fn contains(set: Set(k, v), key: k) -> Bool {
 
 /// Get a reference to an existing table
 pub fn ref(name: String) -> Result(Set(k, v), Nil) {
-  case atom.from_string(name) {
+  case atom.get(name) {
     Ok(t) -> Ok(Set(Table(t)))
     Error(_) -> Error(Nil)
   }
